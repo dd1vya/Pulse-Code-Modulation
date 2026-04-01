@@ -14,137 +14,102 @@ This makes delta modulation easy to implement and bandwidth-efficient, but it ha
 # Program
 ### Pulse Code Modulation (PCM)
 ```
-#PCM
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Parameters
-sampling_rate = 5000  # Sampling rate (samples per second)
-frequency = 50  # Frequency of the message signal (analog signal)
-duration = 0.1  # Duration of the signal in seconds
-quantization_levels = 16  # Number of quantization levels (PCM resolution)
+fs, fm, levels = 5000, 50, 16
 
-# Generate time vector
-t = np.linspace(0, duration, int(sampling_rate * duration), endpoint=False)
+t = np.linspace(0, 0.1, int(fs*0.1), endpoint=False)
 
-# Generate message signal (analog signal)
-message_signal = np.sin(2 * np.pi * frequency * t)
+m = np.sin(2*np.pi*fm*t)
+c = np.sign(np.sin(2*np.pi*200*t))
 
-# Generate clock signal (sampling clock) with higher frequency than before
-clock_signal = np.sign(np.sin(2 * np.pi * 200 * t))  # Increased clock frequency to 200 Hz
+step = (m.max() - m.min()) / levels
+q = np.round(m/step) * step
 
-# Quantize the message signal
-quantization_step = (max(message_signal) - min(message_signal)) / quantization_levels
-quantized_signal = np.round(message_signal / quantization_step) * quantization_step
+plt.figure(figsize=(12,10))
 
-# Simulate the PCM modulated signal (digital representation)
-pcm_signal = (quantized_signal - min(quantized_signal)) / quantization_step
-pcm_signal = pcm_signal.astype(int)
-
-# Plotting the results
-plt.figure(figsize=(12, 10))
-
-# Plot message signal
-plt.subplot(4, 1, 1)
-plt.plot(t, message_signal, label="Message Signal (Analog)", color='blue')
+plt.subplot(4,1,1)
+plt.plot(t, m)
 plt.title("Message Signal (Analog)")
-plt.xlabel("Time [s]")
-plt.ylabel("Amplitude")
-plt.grid(True)
+plt.grid()
 
-# Plot clock signal (higher frequency)
-plt.subplot(4, 1, 2)
-plt.plot(t, clock_signal, label="Clock Signal (Increased Frequency)", color='green')
+plt.subplot(4,1,2)
+plt.plot(t, c)
 plt.title("Clock Signal (Increased Frequency)")
-plt.xlabel("Time [s]")
-plt.ylabel("Amplitude")
-plt.grid(True)
+plt.grid()
 
-# Plot PCM modulated signal (quantized)
-plt.subplot(4, 1, 3)
-plt.step(t, quantized_signal, label="PCM Modulated Signal", color='red')
+plt.subplot(4,1,3)
+plt.step(t, q)
 plt.title("PCM Modulated Signal (Quantized)")
-plt.xlabel("Time [s]")
-plt.ylabel("Amplitude")
-plt.grid(True)
+plt.grid()
 
-# Plot 'PCM Demodulation' 
-plt.subplot(4, 1, 4)
-plt.plot(t, quantized_signal, label="PCM Demodulation Signal", color='purple', linestyle='--')
+plt.subplot(4,1,4)
+plt.plot(t, q, '--')
 plt.title("PCM Demodulation Signal")
-plt.xlabel("Time [s]")
-plt.ylabel("Amplitude")
-plt.grid(True)
+plt.grid()
 
 plt.tight_layout()
 plt.show()
 ```
 ### Delta Modulation
 ```
-#Delta Modulation
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import butter, filtfilt
-# Parameters
-fs = 10000  # Sampling frequency
-f = 10  # Signal frequency
-T = 1  # Duration in seconds
-delta = 0.1  # Step size
-t = np.arange(0, T, 1/fs)
-message_signal = np.sin(2 * np.pi * f * t)  # Sine wave as input signal
-# Delta Modulation Encoding
-encoded_signal = []
-dm_output = [0]  # Initial value of the modulated signal
-prev_sample = 0
-for sample in message_signal:
-    if sample > prev_sample:
-        encoded_signal.append(1)
-        dm_output.append(prev_sample + delta)
-    else:
-        encoded_signal.append(0)
-        dm_output.append(prev_sample - delta)
-    prev_sample = dm_output[-1]
-# Delta Demodulation (Reconstruction)
-demodulated_signal = [0]
-for bit in encoded_signal:
-    if bit == 1:
-        demodulated_signal.append(demodulated_signal[-1] + delta)
-    else:
-        demodulated_signal.append(demodulated_signal[-1] - delta)
-# Convert to numpy array
-demodulated_signal = np.array(demodulated_signal)
-# Apply a low-pass Butterworth filter
-def low_pass_filter(signal, cutoff_freq, fs, order=4):
-    nyquist = 0.5 * fs
-    normal_cutoff = cutoff_freq / nyquist
-    b, a = butter(order, normal_cutoff, btype='low', analog=False)
-    return filtfilt(b, a, signal)
-filtered_signal = low_pass_filter(demodulated_signal, cutoff_freq=20, fs=fs)
-# Plotting the Results
+
+fs, f, d = 10000, 10, 0.1
+
+t = np.arange(0, 1, 1/fs)
+m = np.sin(2*np.pi*f*t)
+
+dm, bits = [0], []
+
+for x in m:
+    s = d if x > dm[-1] else -d
+    bits.append(s > 0)
+    dm.append(dm[-1] + s)
+
+dem = [0]
+for b in bits:
+    dem.append(dem[-1] + (d if b else -d))
+
+dm, dem = np.array(dm), np.array(dem)
+
+b, a = butter(4, 20/(fs/2))
+y = filtfilt(b, a, dem)
+
 plt.figure(figsize=(12, 6))
-plt.subplot(3, 1, 1)
-plt.plot(t, message_signal, label='Original Signal', linewidth=1)
-plt.legend()
+
+plt.subplot(3,1,1)
+plt.plot(t, m, linewidth=1)
+plt.title("Original Signal")
 plt.grid()
-plt.subplot(3, 1, 2)
-plt.step(t, dm_output[:-1], label='Delta Modulated Signal', where='mid')
-plt.legend()
+
+plt.subplot(3,1,2)
+plt.step(t, dm[:-1], where='mid')
+plt.title("Delta Modulated Signal")
 plt.grid()
-plt.subplot(3, 1, 3)
-plt.plot(t, filtered_signal[:-1], label='Demodulated & Filtered Signal', linestyle='dotted', linewidth=1, color='r')
-plt.legend()
+
+plt.subplot(3,1,3)
+plt.plot(t, y[:-1], 'r:', linewidth=1)
+plt.title("Demodulated & Filtered Signal")
 plt.grid()
+
 plt.tight_layout()
 plt.show()
 ```
 # Output Waveform
 ### Pulse Code Modulation 
-<img width="1189" height="990" alt="image" src="https://github.com/user-attachments/assets/1024f2d9-f4d0-4e7b-99e1-b3eda4f0d0a0" />
+
+<img width="1190" height="989" alt="image" src="https://github.com/user-attachments/assets/4a895df8-9f03-4e17-911d-748b94f7b620" />
+
 
 
 ### Delta Modulation 
 
-<img width="1203" height="590" alt="image" src="https://github.com/user-attachments/assets/927a3172-b396-4c60-a3d3-c414e5b8420b" />
+<img width="1189" height="590" alt="image" src="https://github.com/user-attachments/assets/e6d20a2c-6531-49d3-8f04-763e67d7a36b" />
+
 
 
 # Results
