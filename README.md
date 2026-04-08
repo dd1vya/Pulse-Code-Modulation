@@ -50,6 +50,8 @@ decoded = didx * step + m.min() + step/2
 kernel = 10
 reconstructed = np.convolve(decoded, np.ones(kernel)/kernel, mode='same')
 
+clock = np.sign(np.sin(2*np.pi*200*t))
+
 plt.figure(figsize=(12,10))
 
 plt.subplot(4,1,1)
