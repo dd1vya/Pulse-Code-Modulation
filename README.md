@@ -17,15 +17,38 @@ This makes delta modulation easy to implement and bandwidth-efficient, but it ha
 import numpy as np
 import matplotlib.pyplot as plt
 
-fs, fm, levels = 5000, 50, 16
+# Parameters
+fs = 5000          # Sampling frequency
+fm = 50            # Message frequency
+levels = 16        # Quantization levels (4-bit PCM)
+duration = 0.1
 
-t = np.linspace(0, 0.1, int(fs*0.1), endpoint=False)
+t = np.linspace(0, duration, int(fs*duration), endpoint=False)
 
+# 1. Message signal
 m = np.sin(2*np.pi*fm*t)
-c = np.sign(np.sin(2*np.pi*200*t))
 
+# 2. Sampling 
+sampled = m.copy()
+
+# 3. Quantization
 step = (m.max() - m.min()) / levels
-q = np.round(m/step) * step
+qidx = np.floor((sampled - m.min()) / step)
+qidx = np.clip(qidx, 0, levels-1)
+
+q = qidx * step + m.min() + step/2   # mid-rise quantizer
+
+# 4. Encoding (PCM bitstream)
+nbits = int(np.log2(levels))
+bitstream = [format(int(i), f'0{nbits}b') for i in qidx]
+
+# 5. Decoding 
+didx = np.array([int(b, 2) for b in bitstream])
+decoded = didx * step + m.min() + step/2
+
+# 6. Reconstruction
+kernel = 10
+reconstructed = np.convolve(decoded, np.ones(kernel)/kernel, mode='same')
 
 plt.figure(figsize=(12,10))
 
@@ -35,18 +58,18 @@ plt.title("Message Signal (Analog)")
 plt.grid()
 
 plt.subplot(4,1,2)
-plt.plot(t, c)
-plt.title("Clock Signal (Increased Frequency)")
+plt.plot(t, clock)
+plt.title("Clock Signal (Sampling Reference)")
 plt.grid()
 
 plt.subplot(4,1,3)
 plt.step(t, q)
-plt.title("PCM Modulated Signal (Quantized)")
+plt.title("PCM Signal (Sampled + Quantized)")
 plt.grid()
 
 plt.subplot(4,1,4)
-plt.plot(t, q, '--')
-plt.title("PCM Demodulation Signal")
+plt.plot(t, reconstructed, '--')
+plt.title("Reconstructed Signal (After Decoding)")
 plt.grid()
 
 plt.tight_layout()
